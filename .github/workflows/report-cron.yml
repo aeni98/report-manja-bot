@@ -1,0 +1,29 @@
+name: Hourly group report
+
+on:
+  schedule:
+    # 01:00–17:00 UTC = 08:00–00:00 WIB
+    - cron: "0 1-17 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call Vercel endpoint (with retries)
+        env:
+          CRON_ENDPOINT: ${{ secrets.CRON_ENDPOINT }}
+        run: |
+          set -e
+          echo "Hitting $CRON_ENDPOINT"
+          for i in 1 2 3; do
+            code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" "$CRON_ENDPOINT") && ok=1 || ok=0
+            cat /tmp/resp.json || true
+            if [ "$ok" -eq 1 ] && [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+              echo "OK ($code)"; exit 0
+            fi
+            echo "Attempt $i failed (HTTP $code). Retrying in 10s..."
+            sleep 10
+          done
+          echo "Failed after 3 attempts"; exit 1
